@@ -55,7 +55,7 @@ module('OC - OperationProcessors - RelatedInverseLinks', {
 
     schema = new Schema(schemaDefinition);
     cache = new Cache(schema);
-    processor = new RelatedInverseLinksProcessor(schema, cache);
+    processor = new RelatedInverseLinksProcessor(schema, function(path) { return cache.retrieve(path); });
   },
 
   teardown: function(){
