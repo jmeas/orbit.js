@@ -66,13 +66,15 @@ module('OC - OperationProcessors - RelatedInverseLinks', {
 });
 
 function operationsShouldMatch(actualOperations, expectedOperations){
-  console.log("actual", actualOperations);
+  // console.log("actual", actualOperations);
   equal(actualOperations.length, expectedOperations.length, 'Same number of operations');
 
-  for(var i = 0; i < actualOperations.length; i++){
-    var actual = actualOperations[i];
-    var expected = expectedOperations[i];
-    deepEqual(actual.serialize(), expected.serialize(), "Operation " + i + " matches");
+  if (actualOperations.length === expectedOperations.length) {
+    for(var i = 0; i < actualOperations.length; i++){
+      var actual = actualOperations[i];
+      var expected = expectedOperations[i];
+      deepEqual(actual.serialize(), expected.serialize(), "Operation " + i + " matches");
+    }
   }
 }
 
@@ -88,12 +90,20 @@ test('add to hasOne => hasMany', function(){
     moon: { titan: titan, europa: europa }
   });
 
+  var addPlanetOp = op('add', ['moon', europa.id, '__rel', 'planet'], saturn.id);
+
   operationsShouldMatch(
-    processor.process(
-      op('add', ['moon', europa.id, '__rel', 'planet'], saturn.id)
+    processor.before(
+      addPlanetOp
+    ),
+    []
+  );
+
+  operationsShouldMatch(
+    processor.after(
+      addPlanetOp
     ),
     [
-      // op('remove', ['planet', jupiter.id, '__rel', 'moons', europa.id]),
       op('add', ['planet', saturn.id, '__rel', 'moons', europa.id], true)
     ]
   );
@@ -110,12 +120,22 @@ test('replace hasOne => hasMany', function(){
     moon: { titan: titan, europa: europa }
   });
 
+  var replacePlanetOp = op('replace', ['moon', europa.id, '__rel', 'planet'], saturn.id);
+
   operationsShouldMatch(
-    processor.process(
-      op('replace', ['moon', europa.id, '__rel', 'planet'], saturn.id)
+    processor.before(
+      replacePlanetOp
     ),
     [
-      // op('remove', ['planet', jupiter.id, '__rel', 'moons', europa.id]),
+      op('remove', ['planet', jupiter.id, '__rel', 'moons', europa.id])
+    ]
+  );
+
+  operationsShouldMatch(
+    processor.after(
+      replacePlanetOp
+    ),
+    [
       op('add', ['planet', saturn.id, '__rel', 'moons', europa.id], true)
     ]
   );
@@ -130,14 +150,25 @@ test('replace hasMany => hasOne with empty array', function(){
     moon: { titan: titan }
   });
 
+  var clearMoonsOp = op('replace', ['planet', saturn.id, '__rel', 'moons'], {});
+
   operationsShouldMatch(
-    processor.process(
-      op('replace', ['planet', saturn.id, '__rel', 'moons'], {})
+    processor.before(
+      clearMoonsOp
     ),
     [
-      // op('remove', ['moon', titan.id, '__rel', 'planet'])
+      op('replace', ['moon', titan.id, '__rel', 'planet'], null)
     ]
   );
+
+  operationsShouldMatch(
+    processor.after(
+      clearMoonsOp
+    ),
+    [
+    ]
+  );
+
 });
 
 test('replace hasMany => hasOne with empty array', function(){
@@ -149,12 +180,22 @@ test('replace hasMany => hasOne with empty array', function(){
     moon: { titan: titan }
   });
 
+  var clearMoonsOp = op('replace', ['planet', saturn.id, '__rel', 'moons'], {});
+
   operationsShouldMatch(
-    processor.process(
-      op('replace', ['planet', saturn.id, '__rel', 'moons'], {})
+    processor.before(
+      clearMoonsOp
     ),
     [
-      // op('remove', ['moon', titan.id, '__rel', 'planet'])
+      op('replace', ['moon', titan.id, '__rel', 'planet'], null)
+    ]
+  );
+
+  operationsShouldMatch(
+    processor.after(
+      clearMoonsOp
+    ),
+    [
     ]
   );
 });
@@ -169,13 +210,56 @@ test('replace hasMany => hasOne with populated array', function(){
     moon: { titan: titan }
   });
 
+  var replaceMoonsOp = op('replace', ['planet', jupiter.id, '__rel', 'moons'], {titan: true});
+
   operationsShouldMatch(
-    processor.process(
-      op('replace', ['planet', jupiter.id, '__rel', 'moons'], {titan: true})
+    processor.before(
+      replaceMoonsOp
+    ),
+    [
+      // op('replace', ['moon', titan.id, '__rel', 'planet'], null),
+      // op('remove', ['planet', saturn.id, '__rel', 'moons', titan.id])
+    ]
+  );
+
+  operationsShouldMatch(
+    processor.after(
+      replaceMoonsOp
     ),
     [
       op('replace', ['moon', titan.id, '__rel', 'planet'], jupiter.id),
-      // op('remove', ['planet', saturn.id, '__rel', 'moons', titan.id])
+    ]
+  );
+});
+
+test('replace hasMany => hasOne with populated array, when already populated', function(){
+  var saturn = { id: 'saturn', name: "Saturn", __rel: { moons: { 'titan': true } } };
+  var titan = { id: 'titan', name: "Titan", __rel: { planet: 'saturn' } };
+  var europa = { id: 'europa', name: "Europa", __rel: { planet: 'jupiter' } };
+  var jupiter = { id: 'jupiter', name: "Jupiter", __rel: { moons: { 'europa': true } } };
+
+  cache.reset({
+    planet: { saturn: saturn, jupiter: jupiter },
+    moon: { titan: titan, europa: europa }
+  });
+
+  operationsShouldMatch(
+    processor.before(
+      op('replace', ['planet', saturn.id, '__rel', 'moons'], {europa: true})
+    ),
+    [
+      op('replace', ['moon', titan.id, '__rel', 'planet'], null)
+      // op('replace', ['moon', europa.id, '__rel', 'planet'], null),
+      // op('remove', ['planet', jupiter.id, '__rel', 'moons', europa.id])
+    ]
+  );
+
+  operationsShouldMatch(
+    processor.after(
+      op('replace', ['planet', saturn.id, '__rel', 'moons'], {europa: true})
+    ),
+    [
+      op('replace', ['moon', europa.id, '__rel', 'planet'], saturn.id)
     ]
   );
 });
@@ -189,12 +273,22 @@ test('replace hasMany => hasMany', function(){
     planet: { earth: earth }
   });
 
+  var clearRacesOp = op('replace', ['planet', earth.id, '__rel', 'races'], {});
+
   operationsShouldMatch(
-    processor.process(
-      op('replace', ['planet', earth.id, '__rel', 'races'], {})
+    processor.before(
+      clearRacesOp
     ),
     [
-      // op('replace', ['planet', earth.id, '__rel', 'races'], {})
+      op('remove', ['race', human.id, '__rel', 'planets', earth.id])
+    ]
+  );
+
+  operationsShouldMatch(
+    processor.after(
+      clearRacesOp
+    ),
+    [
     ]
   );
 });
@@ -210,12 +304,22 @@ test('remove hasOne => hasMany', function(){
     moon: { titan: titan, europa: europa }
   });
 
+  var removePlanetOp = op('remove', ['moon', europa.id, '__rel', 'planet']);
+
   operationsShouldMatch(
-    processor.process(
-      op('remove', ['moon', europa.id, '__rel', 'planet'])
+    processor.before(
+      removePlanetOp
     ),
     [
       op('remove', ['planet', jupiter.id, '__rel', 'moons', europa.id])
+    ]
+  );
+
+  operationsShouldMatch(
+    processor.after(
+      removePlanetOp
+    ),
+    [
     ]
   );
 });
@@ -229,9 +333,19 @@ test('add to hasOne => hasOne', function(){
     planet: { saturn: saturn, jupiter: jupiter, earth: earth }
   });
 
+  var changePlanetOp = op('add', ['planet', earth.id, '__rel', 'next'], saturn.id);
+
   operationsShouldMatch(
-    processor.process(
-      op('add', ['planet', earth.id, '__rel', 'next'], saturn.id)
+    processor.before(
+      changePlanetOp
+    ),
+    [
+    ]
+  );
+
+  operationsShouldMatch(
+    processor.after(
+      changePlanetOp
     ),
     [
       op('replace', ['planet', saturn.id, '__rel', 'previous'], earth.id)
@@ -248,13 +362,23 @@ test('add to hasOne => hasOne with existing value', function(){
     planet: { saturn: saturn, jupiter: jupiter, earth: earth }
   });
 
+  var changePlanetOp = op('add', ['planet', earth.id, '__rel', 'next'], jupiter.id);
+
   operationsShouldMatch(
-    processor.process(
-      op('add', ['planet', earth.id, '__rel', 'next'], jupiter.id)
+    processor.before(
+      changePlanetOp
+    ),
+    [
+      // op('remove', ['planet', saturn.id, '__rel', 'next'])
+    ]
+  );
+
+  operationsShouldMatch(
+    processor.after(
+      changePlanetOp
     ),
     [
       op('replace', ['planet', jupiter.id, '__rel', 'previous'], earth.id),
-      // op('remove', ['planet', saturn.id, '__rel', 'next'])
     ]
   );
 });
@@ -268,13 +392,24 @@ test('replace hasOne => hasOne with existing value', function(){
     planet: { saturn: saturn, jupiter: jupiter, earth: earth }
   });
 
+  var changePlanetOp = op('replace', ['planet', earth.id, '__rel', 'next'], jupiter.id);
+
   operationsShouldMatch(
-    processor.process(
-      op('replace', ['planet', earth.id, '__rel', 'next'], jupiter.id)
+    processor.before(
+      changePlanetOp
     ),
     [
-      op('replace', ['planet', jupiter.id, '__rel', 'previous'], earth.id),
-      // op('remove', ['planet', saturn.id, '__rel', 'next'])
+      // op('replace', ['planet', jupiter.id, '__rel', 'previous'], null),
+      // op('replace', ['planet', saturn.id, '__rel', 'next'], null)
+    ]
+  );
+
+  operationsShouldMatch(
+    processor.after(
+      changePlanetOp
+    ),
+    [
+      op('replace', ['planet', jupiter.id, '__rel', 'previous'], earth.id)
     ]
   );
 });
@@ -288,9 +423,19 @@ test('add to hasMany => hasMany', function(){
     race: { human: human}
   });
 
+  var addPlanetOp = op('add', ['race', human.id, '__rel', 'planets', earth.id], true);
+
   operationsShouldMatch(
-    processor.process(
-      op('add', ['race', human.id, '__rel', 'planets', earth.id], true)
+    processor.before(
+      addPlanetOp
+    ),
+    [
+    ]
+  );
+
+  operationsShouldMatch(
+    processor.after(
+      addPlanetOp
     ),
     [
       op('add', ['planet', earth.id, '__rel','races', human.id], true)
@@ -307,12 +452,22 @@ test('remove from hasMany => hasMany', function(){
     race: { human: human }
   });
 
+  var removePlanetOp = op('remove', ['race', human.id, '__rel', 'planets', earth.id]);
+
   operationsShouldMatch(
-    processor.process(
-      op('remove', ['race', human.id, '__rel', 'planets', earth.id])
+    processor.before(
+      removePlanetOp
     ),
     [
       op('remove', ['planet', earth.id, '__rel','races', human.id])
+    ]
+  );
+
+  operationsShouldMatch(
+    processor.after(
+      removePlanetOp
+    ),
+    [
     ]
   );
 });

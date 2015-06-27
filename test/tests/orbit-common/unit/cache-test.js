@@ -269,7 +269,7 @@ test("#transform removing model with a bi-directional hasOne", function() {
   strictEqual(one.__rel.two, null, 'ones link to two got removed');
 });
 
-test("#transform maintainDependencies:true removes dependent records", function() {
+test("#transform removes dependent records", function() {
   // By making this schema recursively dependent remove we check that recursive
   // works as well.
   var dependentSchema = new Schema({
@@ -302,25 +302,24 @@ test("#transform maintainDependencies:true removes dependent records", function(
   cache.transform({op: 'remove', path: 'moon/m1'});
   equal(cache.length('moon'), 0, 'No moons left in store');
   equal(cache.length('planet'), 0, 'No planets left in store');
-
 });
 
-test("#transform maintainDependencies:false does not remove dependent records", function() {
+test("#transform does not remove non-dependent records", function() {
   var dependentSchema = new Schema({
     models: {
       planet: {
         links: {
-          moons: {type: 'hasMany', model: 'moon', dependent: 'remove'}
+          moons: {type: 'hasMany', model: 'moon'}
         }
       },
       moon: {
         links: {
-          planet: {type: 'hasOne', model: 'planet', dependent: 'remove'}
+          planet: {type: 'hasOne', model: 'planet'}
         }
       }
     }
   });
-  cache = new Cache(dependentSchema, { maintainDependencies: false });
+  cache = new Cache(dependentSchema);
 
   var jupiter = {id: 'p1', name: 'Jupiter', __rel: {moons: {}}};
   var io = {id: 'm1', name: 'Io', __rel: {planet: 'p1'}};
@@ -337,5 +336,4 @@ test("#transform maintainDependencies:false does not remove dependent records", 
   cache.transform({op: 'remove', path: 'moon/m1'});
   equal(cache.length('moon'), 1, 'One moon left in store');
   equal(cache.length('planet'), 1, 'One planet left in store');
-
 });
